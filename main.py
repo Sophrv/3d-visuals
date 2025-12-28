@@ -1,36 +1,52 @@
-from vectors import *
+from graphics import *
 import pygame
 pygame.init()
 
-window = pygame.display.set_mode((0, 0), pygame.FULLSCREEN)
+# , pygame.FULLSCREEN
+window = pygame.display.set_mode((1920, 1000))
 running = True
 fps = 60
 fps_Clock = pygame.time.Clock()
 black = (0, 0, 0)
 blue = (0, 0, 255)
 
-active_lines = [
-    (Segment(Vector((500, 500, 500)), Vector((1000, 500, 500))), black),
-    (Segment(Vector((500, 500, 500)), Vector((500, 1000, 500))), black),
-    (Segment(Vector((500, 500, 500)), Vector((500, 500, 1000))), black),
-    (Segment(Vector((1000, 500, 500)), Vector((1000, 1000, 500))), black),
-    (Segment(Vector((1000, 500, 500)), Vector((1000, 500, 1000))), black),
-    (Segment(Vector((500, 1000, 500)), Vector((1000, 1000, 500))), black),
-    (Segment(Vector((500, 1000, 500)), Vector((500, 1000, 1000))), black),
-    (Segment(Vector((500, 500, 1000)), Vector((1000, 500, 1000))), black),
-    (Segment(Vector((500, 500, 1000)), Vector((500, 1000, 1000))), black),
-    (Segment(Vector((1000, 1000, 500)), Vector((1000, 1000, 1000))), black),
-    (Segment(Vector((1000, 500, 1000)), Vector((1000, 1000, 1000))), black),
-    (Segment(Vector((500, 1000, 1000)), Vector((1000, 1000, 1000))), black),
+
+points = [
+    Vector((5, 5, 5)),
+    Vector((5, 5, 10)),
+    Vector((5, 10, 5)),
+    Vector((5, 10, 10)),
+    Vector((10, 5, 5)),
+    Vector((10, 5, 10)),
+    Vector((10, 10, 5)),
+    Vector((10, 10, 10))
 ]
 
-for i in range(1, 2000, 40):
-    active_lines.append((Segment(Vector((i, 0, 0)), Vector((i + 20, 0, 0))), blue))
-    active_lines.append((Segment(Vector((0, i, 0)), Vector((0, i + 20, 0))), blue))
-    active_lines.append((Segment(Vector((0, 0, i)), Vector((0, 0, i + 20))), blue))
+
+active_lines = [
+    (Segment(points[0], points[4]), black),
+    (Segment(points[0], points[2]), black),
+    (Segment(points[0], points[1]), black),
+    (Segment(points[4], points[6]), black),
+    (Segment(points[4], points[5]), black),
+    (Segment(points[2], points[6]), black),
+    (Segment(points[2], points[3]), black),
+    (Segment(points[1], points[5]), black),
+    (Segment(points[1], points[3]), black),
+    (Segment(points[6], points[7]), black),
+    (Segment(points[5], points[7]), black),
+    (Segment(points[3], points[7]), black),
+]
 
 
-cam = Camera(Vector((-100, 0, -100)), Vector((10, -10, 0)), 150)
+
+cam = Camera(Vector((-100, 0, 0)), 0, 0, 100)
+
+for line, colour in active_lines:
+    start, end = line.project(cam)
+    start = [i + 500 for i in start]
+    end = [i + 500 for i in end]
+    print(f"{start} | {end}")
 
 
 while running:
@@ -38,25 +54,26 @@ while running:
         if event.type == pygame.QUIT:
             running = False
             break
+
     keys = pygame.key.get_pressed()
     if keys[pygame.K_w]:
-        cam.add_position(Vector((10, 0, 0)))
-        print(f"Camera position: {cam.position.return_pos()}")
+        cam.add_position(Vector((0.10, 0, 0)))
+        print(f"Camera position: {cam.position.get_pos()}")
     if keys[pygame.K_s]:
-        cam.add_position(Vector((-10, 0, 0)))
-        print(f"Camera position: {cam.position.return_pos()}")
+        cam.add_position(Vector((-0.10, 0, 0)))
+        print(f"Camera position: {cam.position.get_pos()}")
     if keys[pygame.K_a]:
-        cam.add_position(Vector((0, 10, 0)))
-        print(f"Camera position: {cam.position.return_pos()}")
+        cam.add_position(Vector((0, 0.10, 0)))
+        print(f"Camera position: {cam.position.get_pos()}")
     if keys[pygame.K_d]:
-        cam.add_position(Vector((0, -10, 0)))
-        print(f"Camera position: {cam.position.return_pos()}")
+        cam.add_position(Vector((0, -0.10, 0)))
+        print(f"Camera position: {cam.position.get_pos()}")
     if keys[pygame.K_r]:
-        cam.add_position(Vector((0, 0, 10)))
-        print(f"Camera position: {cam.position.return_pos()}")
+        cam.add_position(Vector((0, 0, 0.10)))
+        print(f"Camera position: {cam.position.get_pos()}")
     if keys[pygame.K_f]:
-        cam.add_position(Vector((0, 0, -10)))
-        print(f"Camera position: {cam.position.return_pos()}")
+        cam.add_position(Vector((0, 0, -0.10)))
+        print(f"Camera position: {cam.position.get_pos()}")
     if keys[pygame.K_z]:
         cam.zoom(1)
         print(f"Zoom is now {cam.fov}")
@@ -69,8 +86,8 @@ while running:
     window.fill((255, 255, 255))
     for line, colour in active_lines:
         start, end = line.project(cam)
-        start = [i + 1000 for i in start]
-        end = [i + 1000 for i in end]
+        start = tuple([i + 500 for i in start])
+        end = tuple([i + 500 for i in end])
         pygame.draw.line(window, colour, start, end, 2)
 
 
