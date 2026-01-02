@@ -18,9 +18,6 @@ z is up
 class Vector:
     def __init__(self, position_vector: tuple[float, float, float]):
         self.x, self.y, self.z = position_vector
-        self.rotation_x = 0
-        self.rotation_y = 0
-        self.rotation_z = 0
         self.magnitude = math.hypot(self.x, self.y, self.z)
 
     def __add__(self, other: Vector) -> Vector:
@@ -37,14 +34,28 @@ class Vector:
             self.z - other.z
         ))
 
+    def __mul__(self, other: float) -> Vector:
+        return Vector((
+            self.x * other,
+            self.y * other,
+            self.z * other
+        ))
+
+    def __str__(self):
+        return f"({self.x}, {self.y}, {self.z})"
+
     def get_pos(self):
         return self.x, self.y, self.z
 
-    def matrix_multiply(self, other: Matrix) -> Vector:
+    def matrix_multiply(self, other: Matrix):
+        self.x, self.y, self.z = self.get_matrix_multiply(other).get_pos()
+        self.magnitude *= other.determinant
+
+    def get_matrix_multiply(self, other: Matrix) -> Vector:
         return Vector((
-            math.sumprod(self.get_pos(), other.contents[0]),
-            math.sumprod(self.get_pos(), other.contents[1]),
-            math.sumprod(self.get_pos(), other.contents[2]),
+            round(math.sumprod(self.get_pos(), other.contents[0]), 30),
+            round(math.sumprod(self.get_pos(), other.contents[1]), 30),
+            round(math.sumprod(self.get_pos(), other.contents[2]), 30),
         ))
 
 
@@ -74,30 +85,41 @@ class Matrix:
             for i in range(3)]) for k in range(3)]))
 
 class Camera:
-    def __init__(self, position: Vector, yaw: float, pitch: float, fov: float):
+    def __init__(self, position: Vector, fov: float):
         self.position = position
-        self.yaw = yaw
-        self.pitch = pitch
+        self.yaw = 0
+        self.pitch = 0
+        self.roll = 0
         self.fov = fov
         self.facing = Vector((1, 0, 0))
         self.upwards = Vector((0, 0, 1))
-
-        self.turn_vertical(pitch)
-        self.turn_horizonal(yaw)
 
     def turn_horizonal(self, degrees):
         self.facing.matrix_multiply(rotation_matrix_z(degrees))
         self.upwards.matrix_multiply(rotation_matrix_z(degrees))
         self.yaw += degrees
+        self.yaw %= 2 * math.pi
+        # self.yaw = round(self.yaw, 4)
 
     def turn_vertical(self, degrees):
-        self.facing.matrix_multiply(rotation_matrix_z(-self.yaw))
-        self.facing.matrix_multiply(rotation_matrix_y(degrees))
-        self.facing.matrix_multiply(rotation_matrix_z(self.yaw))
-        self.upwards.matrix_multiply(rotation_matrix_z(-self.yaw))
-        self.upwards.matrix_multiply(rotation_matrix_y(degrees))
-        self.upwards.matrix_multiply(rotation_matrix_z(self.yaw))
+        for vector in [self.facing, self.upwards]:
+            vector.matrix_multiply(rotation_matrix_z(-self.yaw))
+            vector.matrix_multiply(rotation_matrix_y(degrees))
+            vector.matrix_multiply(rotation_matrix_z(self.yaw))
         self.pitch += degrees
+        self.pitch %= 2 * math.pi
+        # self.pitch = round(self.pitch, 4)
+
+    def turn_roll(self, degrees):
+        for vector in [self.facing, self.upwards]:
+            vector.matrix_multiply(rotation_matrix_z(-self.yaw))
+            vector.matrix_multiply(rotation_matrix_y(-self.pitch))
+            vector.matrix_multiply(rotation_matrix_x(degrees))
+            vector.matrix_multiply(rotation_matrix_y(self.pitch))
+            vector.matrix_multiply(rotation_matrix_z(self.yaw))
+        self.roll += degrees
+        self.roll %= 2 * math.pi
+        # self.roll = round(self.roll, 4)
 
     def add_position(self, vector: Vector):
         self.position += vector
@@ -112,17 +134,39 @@ class Segment(Vector):
         self.points = (point1, point2)
 
     def project(self, cam: Camera):
-        solution = []
-        for point in self.points:
-            difference_vector = point - cam.position
-            distance_to_cam = dot(cam.facing, difference_vector)
-            projection_distance = math.hypot(difference_vector.magnitude, distance_to_cam) * cam.fov / distance_to_cam
-            projection_angle = math.atan2(dot(cam.facing, cross(cam.upwards, difference_vector)), dot(cam.upwards, difference_vector))
-            projection_x = projection_distance*math.sin(projection_angle)
-            projection_y = projection_distance*math.cos(projection_angle)
-            solution.append((projection_x, projection_y))
+        difference_vectors = [point - cam.position for point in self.points]
+        distances_to_cam = [dot(cam.facing, vector) for vector in difference_vectors]
+        if all([scalar < 0 for scalar in distances_to_cam]):
+            return (-2000, -2000), (-2000, -2000)
+        point_projection = []
+        for i, point in enumerate(self.points):
+            distance = distances_to_cam[i]
+            diff_vector = difference_vectors[i]
+            if distance > 0.0005:
+                proj_distance = math.sqrt(difference_vectors[i].magnitude ** 2 - distance ** 2) * cam.fov / distance
+            elif distance < -0.0005:
+                plane_midpoint = cam.position + (cam.facing * cam.fov)
+                # finding plane where all points dotted with the facing direction is equal to the fov, form ax+by+cz=d
+                # a, b, c don't need to be unpacked from cam.facing.get_pos()
+                d = dot(cam.facing, plane_midpoint)
+                # now finding where the vector forming the segment intersects this plane
+                segment_vector = self.points[0] - self.points[1]
+                anchor_point = self.points[0]
+                line_lambda = (d - math.sumprod(cam.facing.get_pos(), anchor_point.get_pos()) /
+                               math.sumprod(segment_vector.get_pos(), cam.facing.get_pos()))
+                contact_point = anchor_point + segment_vector * line_lambda
+                proj_distance = (contact_point - plane_midpoint).magnitude * cam.fov
+            else:
+                proj_distance = (difference_vectors[i] - cam.position + (cam.facing * cam.fov)).magnitude * cam.fov
 
-        return tuple(solution)
+            proj_angle = math.pi + math.atan2(dot(cam.facing, cross(cam.upwards, diff_vector)), dot(cam.upwards, diff_vector))
+
+            point_projection.append((proj_angle, proj_distance))
+
+
+        return tuple([(distance*math.sin(angle), distance*math.cos(angle)) for angle, distance in point_projection])
+
+
 
 
 def dot(vct1: Vector, vct2: Vector) -> float:
